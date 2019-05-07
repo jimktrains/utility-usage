@@ -1,3 +1,4 @@
+*.sqlite3
 config.ini
 __pycache__/
 am_cache*
