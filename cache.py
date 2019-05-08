@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 from datetime import timedelta 
 
+cache_db = None
+
 def fetch_cached(session, method, url, params=None, data=None, headers=None, cache_ttl=None):
     flush_cache()
     param_to_hash = json.dumps(params).encode('utf8')
@@ -45,13 +47,15 @@ def flush_cache():
     cache_db.execute("delete from cache where current_timestamp > expires_at")
     cache_db.commit()
 
-cache_db_file = 'cache.sqlite3'
-if not os.path.exists(cache_db_file):
-    cache_db = sqlite3.connect(cache_db_file)
-    cache_db.execute("create table cache (" + 
-                     "cache_key varchar(250) primary key, " + 
-                     "cache_value text not null, " + 
-                     "expires_at datetime not null)")
-    cache_db.commit()
-else:
-    cache_db = sqlite3.connect(cache_db_file)
+def init(storage_path):
+    global cache_db
+    cache_db_file = storage_path + 'cache.sqlite3'
+    if not os.path.exists(cache_db_file):
+        cache_db = sqlite3.connect(cache_db_file)
+        cache_db.execute("create table cache (" + 
+                         "cache_key varchar(250) primary key, " + 
+                         "cache_value text not null, " + 
+                         "expires_at datetime not null)")
+        cache_db.commit()
+    else:
+        cache_db = sqlite3.connect(cache_db_file)

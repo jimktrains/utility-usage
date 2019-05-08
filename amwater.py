@@ -11,6 +11,7 @@ import glob
 import json
 import re
 import requests
+import os
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:67.0) Gecko/20100101 Firefox/67.0',
@@ -49,11 +50,10 @@ def all_acounts(session):
 
     return accounts
 
-def get_usage(config):
+def get_usage(config, download_path):
     session = requests.Session()
 
     url = "https://wss.amwater.com/selfservice-web/processLogin.do"
-    #url = "https://httpbin.org/cookies/set/a/1"
     payload = {
             'loginReferrer': 'login',
             'action': '',
@@ -65,9 +65,11 @@ def get_usage(config):
     results = []
     for account in accounts:
         bs = switch_account(session, account)
-        readings = extract_readings(bs)
-        bills = extract_bills(bs, session)
+        readings = extract_readings(session, account)
+        bills = extract_bills(session, account)
         payments = extract_payments(bs)
+        for bill in bills:
+            download_bill(session, account, bill, download_path)
         results.append({
             'account': account, 
             'usage': readings,
@@ -111,12 +113,20 @@ def extract_payments(bs):
             })
     return payments
 
-def extract_bills(bs, session):
+def extract_bills(session, account):
     TX_DATE_IDX=0
     TX_TYPE_IDX=1
     IMPORTANT_INFORMATION_IDX=2
     AMOUNT_IDX=3
     BALANCE_IDX=4
+
+    url = "https://wss.amwater.com/selfservice-web/accountDetailActivity.do"
+    params = {
+        "accountNumber": account.account_number,
+        "activityRange": 24
+    }
+    text = fetch_cached(session, 'post', url, data=params, headers=headers)
+    bs = BeautifulSoup(text, "lxml")
 
     bills = []
     for row in bs.select('#transactionActivityTable tr'):
@@ -126,7 +136,6 @@ def extract_bills(bs, session):
         if 'View Bill' in cells[TX_TYPE_IDX].text:
             bill_date = cells[TX_DATE_IDX].text.split('/')
             bill_date = bill_date[2] + '-' + bill_date[1] + '-' + bill_date[0]
-            account_number = bs.select('nav#menuBar')[0]['data-accountnumber']
             bills.append(Bill(
                 None,
                 parse_slash_date(cells[TX_DATE_IDX].text), 
@@ -134,26 +143,35 @@ def extract_bills(bs, session):
                 cells[AMOUNT_IDX].text, 
                 cells[BALANCE_IDX].text, 
                 cells[IMPORTANT_INFORMATION_IDX].text.strip(),
-                "https://wss.amwater.com/" + cells[TX_TYPE_IDX].select('a')[0]['href']
+                # Adding a / to the end of the prefix makes the path have two /s
+                # which is normally fine, but it invalidates the session?
+                "https://wss.amwater.com" + cells[TX_TYPE_IDX].select('a')[0]['href']
             ))
     return bills
 
-def filename_base_for_downloaded_bill(account_number, date):
-    return 'AM-Water_' + str(account_number) + '_' + str(date)
+def filename_base_for_downloaded_bill(account, bill, download_path):
+    return download_path + '/amwater/AM-Water_' + str(account.account_number) + '_' + bill.bill_date.strftime('%Y-%m-%d')
 
-def has_downloaded_bill(account_number, date):
-    files = glob.glob(filename_base_for_downloaded_bill(account_number, date) + "*")
+def has_downloaded_bill(fn):
+    files = glob.glob(fn + "*")
     return len(files) != 0
 
-def download_bill(account_number, date, url, session):
-    fn = filename_base_for_downloaded_bill(account_number, date) + ".pdf"
-    print("would have downloaded " + url + " to " + fn)
-    # r = session.get(url)
-    # with file(fn, 'w') as f:
-    #     f.write(r.content)
+def download_bill(session, account, bill, download_path):
+    fn = filename_base_for_downloaded_bill(account, bill, download_path) + ".pdf"
+    if not has_downloaded_bill(fn):
+        print("downloaded " + bill.pdf_url + " to " + fn)
+        r = session.get(bill.pdf_url, headers=headers)
+
+        directory = os.path.dirname(os.path.abspath(fn))
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+        with open(fn, 'wb') as f:
+            f.write(r.content)
+        return fn
+    print("already downloaded " + bill.pdf_url + " to " + fn)
     return fn
 
-def extract_readings(bs):
+def extract_readings(session, account):
     READ_DATE_IDX = 0
     BILL_DATE_IDX = 1
     USAGE_IDX = 2
@@ -162,6 +180,13 @@ def extract_readings(bs):
     METER_NUMBER_IDX = 6
     SERVICE_TYPE_IDX = 7
     readings = []
+    url = "https://wss.amwater.com/selfservice-web/accountDetailUsage.do"
+    params = {
+        "accountNumber": account.account_number,
+        "usageRange": 24
+    }
+    text = fetch_cached(session, 'post', url, data=params, headers=headers)
+    bs = BeautifulSoup(text, "lxml")
     for row in bs.select('#usageActivityTable tr'):
         cells = row.select('td')
         if (len(cells) < 8):

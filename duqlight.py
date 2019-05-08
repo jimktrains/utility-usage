@@ -11,10 +11,16 @@ from models.reading import Reading
 from models.bill import Bill
 from models.account import Account
 from models.address import Address
+import os
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:67.0) Gecko/20100101 Firefox/67.0',
 }
+
+class DLBill(Bill):
+    def __init__(self, util_id, bill_date, due_date, amount, balance, pdf_hash):
+        super().__init__(util_id, bill_date, due_date, amount, balance)
+        self.pdf_url = f"https://www.duquesnelight.com/account-billing/account-summary/DownloadBillPdf/{pdf_hash}"
 
 def all_acounts(session):
     url = "https://www.duquesnelight.com/account-billing/account-summary/GetAccounts"
@@ -40,7 +46,7 @@ def all_acounts(session):
         accounts.append(Account('DuqueseLight', account['AccountNumber'], address))
     return accounts
 
-def get_usage(config):
+def get_usage(config, download_path):
     session = requests.Session()
 
     url = "https://www.duquesnelight.com/Home/login"
@@ -58,7 +64,7 @@ def get_usage(config):
         readings = extract_readings(session, account)
         bills = extract_bills(session, account)
         for bill in bills:
-            download_bill(session, account, bill)
+            download_bill(session, account, bill, download_path)
         results.append({
             'account': account,
             'usage': readings,
@@ -93,22 +99,29 @@ def extract_bills(session, account):
         ))
     return bills
 
-def filename_base_for_downloaded_bill(account, bill):
+def filename_base_for_downloaded_bill(account, bill, download_path):
     an = str(account.account_number)
     bd = bill.bill_date.strftime('%Y-%m-%d')
-    return f"DuquesneLight_{an}_{bd}"
+    return f"{download_path}/duqlight/DuquesneLight_{an}_{bd}"
 
-def has_downloaded_bill(account, bill):
-    files = glob.glob(filename_base_for_downloaded_bill(account, bill) + "*")
+def has_downloaded_bill(fn):
+    files = glob.glob(fn + "*")
     return len(files) != 0
 
-def download_bill(session, account, bill):
-    fn = filename_base_for_downloaded_bill(account, bill) + ".pdf"
-    print("would have downloaded " + bill.pdf_url + " to " + fn)
-    # if not has_downloaded_bill(account, bill):
-    #     r = fetch_cached(session, 'get', bill['meta']['pdf_url'])
-    #     with file(fn, 'w') as f:
-    #         f.write(r.content)
+def download_bill(session, account, bill, download_path):
+    fn = filename_base_for_downloaded_bill(account, bill, download_path) + ".pdf"
+    if not has_downloaded_bill(fn):
+        r = session.request('get', bill.pdf_url)
+
+        directory = os.path.dirname(os.path.abspath(fn))
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
+        with open(fn, 'wb') as f:
+            f.write(r.content)
+        print("downloaded " + bill.pdf_url + " to " + fn)
+        return fn
+    print("already downloaded " + bill.pdf_url + " to " + fn)
     return fn
 
 def parse_asp_net_json_datetime(value):
@@ -160,7 +173,3 @@ def extract_readings(session, account):
         readings.append(Reading(read_date, reading['Read'], reading['UnitOfMeasure'], None, None))
     return readings
 
-class DLBill(Bill):
-    def __init__(self, util_id, bill_date, due_date, amount, balance, pdf_hash):
-        super().__init__(util_id, bill_date, due_date, amount, balance)
-        self.pdf_url = f"https://www.duquesnelight.com/account-billing/account-summary/DownloadBillPdf/{pdf_hash}"

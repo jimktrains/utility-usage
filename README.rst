@@ -21,6 +21,9 @@ utilities. Currently, that means:
 
 .. code-block::
 
+    [storage]
+    download_path=
+
     [amwater]
     username=
     password=
@@ -28,3 +31,8 @@ utilities. Currently, that means:
     [duqlight]
     username=
     password=
+
+ToDo
+---------
+
+So, I'd like to move SQLAlchemy for the db interactions.

@@ -12,4 +12,4 @@ class Bill:
     def __str__(self):
         date = self.bill_date.strftime("%Y-%m-%d")
         due = self.due_date.strftime("%Y-%m-%d")
-        return f"{self.amount}@{date} Due:{due} Balance:{self.balance} f{self.important_information}"
+        return f"{self.amount}@{date} Due:{due} Balance:{self.balance} {self.important_information}"
