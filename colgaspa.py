@@ -37,10 +37,10 @@ def extract_number(value):
     if len(g) == 1:
         return g[0]
 
-def select_single(base, selector):
+def select_single(base, selector, idx):
     cells = base.select(selector)
-    for cell in cells:
-        return cell.text
+    if idx < len(cells):
+        return cells[idx].text
 
 def all_acounts(session):
     url = "https://myaccount.columbiagaspa.com/dashboard"
@@ -49,10 +49,11 @@ def all_acounts(session):
 
     accounts = []
     for row in bs.select('#portal-sidebar'):
-        account_number = extract_number(select_single(row, '.portal__account span:nth-of-type(3)'))
+        account_number = extract_number(select_single(row, '.portal__account span', 2))
+        print(row.select('.portal__account span'))
 
-        street_1 = select_single(row, '.portal__account span:nth-of-type(5)')
-        city_state_zip = select_single(row, '.portal__account span:nth-of-type(6)')
+        street_1 = select_single(row, '.portal__account span', 4)
+        city_state_zip = select_single(row, '.portal__account span', 5)
         g = re.search("(?P<city>.*), (?P<state>PA) (?P<zipcode>[0-9]{5})", city_state_zip)
 
         address = Address(
@@ -148,7 +149,7 @@ def extract_readings(session, account):
     text = fetch_cached(session, 'get', url, headers=headers)
     bs = BeautifulSoup(text, "lxml")
 
-    meter_type = select_single(bs, '.meter-data li:nth-of-type(4)')
+    meter_type = select_single(bs, '.meter-data li', 4)
     meter_type = meter_type.replace('Meter Type', '').strip()
 
 
