@@ -83,8 +83,6 @@ def switch_account(session, account):
         'accountNumber': account.account_number
     }
     text = fetch_cached(session, 'post', url, data=payload, headers=headers)
-    with open('am_cache') as f:
-        text = f.read()
     bs = BeautifulSoup(text, 'lxml')
     return bs
 
