@@ -2,6 +2,7 @@
 
 import amwater
 import duqlight
+import colgaspa
 from configparser import ConfigParser
 import os
 import sqlite3
@@ -39,7 +40,8 @@ def print_results(results):
 results = amwater.get_usage(config['amwater'], download_path)
 print_results(results)
 
-
 results = duqlight.get_usage(config['duqlight'], download_path)
 print_results(results)
 
+results = colgaspa.get_usage(config['colgaspa'], download_path)
+print_results(results)
